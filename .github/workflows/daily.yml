@@ -3,6 +3,7 @@ name: Daily AI Econ Digest
 on:
   schedule:
     - cron: "30 6 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch: {}
 
 jobs:

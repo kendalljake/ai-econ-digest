@@ -113,18 +113,24 @@ def parse_datetime(entry) -> datetime:
 
 def guess_kind(url: str, tags: List[str]) -> str:
     u = (url or "").lower()
-    if "arxiv.org" in u:
+    tagset = set(tags or [])
+
+    if "arxiv.org" in u or "working_papers" in tagset or "research" in tagset:
         return "paper"
-    if "news" in tags:
+    if "news" in tagset or "journalism" in tagset:
         return "news"
-    if any(t in tags for t in ["blog", "econ", "policy", "tech"]):
+    if "blog" in tagset or "podcast" in tagset:
         return "blog"
     return "unknown"
 
 
 def fetch_rss_items(feed_name: str, feed_url: str, tags: List[str]) -> List[Item]:
+    if not feed_url or feed_url.startswith("MANUAL_"):
+        return []
+
     fp = feedparser.parse(feed_url)
     items: List[Item] = []
+
     for e in fp.entries:
         url = normalize_url(getattr(e, "link", "") or "")
         title = (getattr(e, "title", "") or "").strip()
@@ -140,11 +146,12 @@ def fetch_rss_items(feed_name: str, feed_url: str, tags: List[str]) -> List[Item
                 title=title,
                 url=url,
                 published=published,
-                summary=(summary or "")[:1600],
+                summary=(summary or "")[:2000],
                 kind=guess_kind(url, tags),
-                tags=tags,
+                tags=tags or [],
             )
         )
+
     return items
 
 
@@ -157,18 +164,10 @@ def load_text(path: str) -> str:
         return f.read().strip()
 
 
-def keyword_score(text: str, keywords: List[str]) -> float:
-    t = (text or "").lower()
-    score = 0.0
-    for kw in keywords:
-        k = (kw or "").strip().lower()
-        if k and k in t:
-            score += 1.0
-    return score
-
 def count_hits(text: str, keywords: List[str]) -> int:
     t = (text or "").lower()
-    return sum(1 for kw in keywords if kw.lower() in t)
+    return sum(1 for kw in keywords if (kw or "").lower() in t)
+
 
 def source_prior(tags: List[str], source: str) -> float:
     score = 0.0
@@ -186,27 +185,39 @@ def source_prior(tags: List[str], source: str) -> float:
         score += 0.8
     if "policy" in tagset:
         score += 0.5
+    if "working_papers" in tagset:
+        score += 0.7
 
-    # small manual bump for especially high-signal sources
     elite_sources = {
-        "Rest of World", "The Markup", "ProPublica", "VoxEU / CEPR",
-        "Noahpinion", "The Diff", "MIT Work of the Future",
-        "Stanford HAI", "TechCabal", "IZA Discussion Papers"
+        "Rest of World",
+        "The Markup",
+        "ProPublica",
+        "VoxEU / CEPR",
+        "Noahpinion",
+        "The Diff",
+        "MIT Work of the Future",
+        "Stanford HAI",
+        "TechCabal",
+        "IZA Discussion Papers",
+        "NBER",
     }
     if source in elite_sources:
         score += 0.5
 
     return score
 
+
 def thematic_scores(text: str) -> Dict[str, float]:
     labor_keywords = [
         "labor", "jobs", "employment", "wages", "occupation", "occupations",
-        "worker", "workers", "productivity", "inequality", "hiring", "skills"
+        "worker", "workers", "productivity", "inequality", "hiring", "skills",
+        "task", "tasks", "automation"
     ]
     structural_keywords = [
         "firm", "firms", "organization", "organizational", "workflow", "workflows",
         "management", "diffusion", "market power", "platform", "open source",
-        "compute", "infrastructure", "business model", "competition", "adoption"
+        "compute", "infrastructure", "business model", "competition", "adoption",
+        "bottleneck", "bottlenecks", "verification", "underwriting"
     ]
     africa_keywords = [
         "africa", "african", "nigeria", "kenya", "uganda", "south africa",
@@ -229,6 +240,7 @@ def thematic_scores(text: str) -> Dict[str, float]:
         "theory": 1.0 * count_hits(text, theory_keywords),
         "hype_penalty": -1.2 * count_hits(text, hype_negative),
     }
+
 
 def select_top(items: List[Item], cfg: Dict) -> List[Item]:
     rank_cfg = cfg.get("ranking", {})
@@ -277,25 +289,21 @@ def select_top(items: List[Item], cfg: Dict) -> List[Item]:
     kind_counts = {"paper": 0, "blog": 0, "news": 0, "unknown": 0}
     africa_count = 0
 
-    # pass 1: enforce variety
+    # Pass 1: try to enforce variety
     for total, theme, it in scored:
         if len(chosen) >= top_k:
             break
-
-        # avoid taking too many from the same source
         if it.source in used_sources:
             continue
 
-        # ensure at least one paper if possible
         if kind_counts["paper"] == 0 and it.kind == "paper":
             chosen.append(it)
             used_sources.add(it.source)
             kind_counts[it.kind] += 1
-            if "africa" in it.tags:
+            if "africa" in it.tags or theme["africa"] > 0:
                 africa_count += 1
             continue
 
-        # try to include at least one Africa-relevant item
         if africa_count == 0 and ("africa" in it.tags or theme["africa"] > 0):
             chosen.append(it)
             used_sources.add(it.source)
@@ -303,8 +311,8 @@ def select_top(items: List[Item], cfg: Dict) -> List[Item]:
             africa_count += 1
             continue
 
-    # pass 2: fill remaining slots by score with light dedupe
-    seen_title_keys = {re.sub(r"\\W+", "", x.title.lower())[:90] for x in chosen}
+    # Pass 2: fill remaining by score with light dedupe
+    seen_title_keys = {re.sub(r"\W+", "", x.title.lower())[:90] for x in chosen}
 
     for total, theme, it in scored:
         if len(chosen) >= top_k:
@@ -312,7 +320,7 @@ def select_top(items: List[Item], cfg: Dict) -> List[Item]:
         if it.source in used_sources:
             continue
 
-        key = re.sub(r"\\W+", "", it.title.lower())[:90]
+        key = re.sub(r"\W+", "", it.title.lower())[:90]
         if key in seen_title_keys:
             continue
 
@@ -320,6 +328,8 @@ def select_top(items: List[Item], cfg: Dict) -> List[Item]:
         used_sources.add(it.source)
         seen_title_keys.add(key)
         kind_counts[it.kind] += 1
+        if "africa" in it.tags or theme["africa"] > 0:
+            africa_count += 1
 
     return chosen[:top_k]
 
@@ -399,7 +409,7 @@ def llm_run(api_key: str, model: str, prompt: str) -> str:
             },
             {"role": "user", "content": prompt},
         ],
-        temperature=0.4,
+        temperature=0.3,
     )
     return resp.choices[0].message.content.strip()
 
@@ -493,29 +503,40 @@ def main():
     ensure_db()
     cfg = load_config()
 
+    # Optional email intake for new feed URLs
     email_intake_add_feeds(cfg)
 
     all_items: List[Item] = []
 
+    # Standard feeds
     for f in cfg.get("feeds", []):
         name = f.get("name", "Unknown")
         url = f.get("url", "")
         tags = f.get("tags", []) or []
+        feed_type = f.get("type", "rss")
+
+        if feed_type not in {"rss", "manual"}:
+            continue
+        if feed_type == "manual":
+            continue
         if not url:
             continue
+
         try:
             all_items.extend(fetch_rss_items(name, url, tags))
         except Exception:
             pass
 
+    # arXiv category RSS
     for cat in cfg.get("arxiv", {}).get("categories", []):
         try:
             rss = arxiv_rss_url(cat)
-            all_items.extend(fetch_rss_items(f"arXiv {cat}", rss, ["paper", "arxiv", cat]))
+            all_items.extend(fetch_rss_items(f"arXiv {cat}", rss, ["paper", "arxiv", cat, "research"]))
         except Exception:
             pass
 
-    days_back = int(cfg.get("ranking", {}).get("days_back", 2))
+    # Filter by date window + unseen
+    days_back = int(cfg.get("ranking", {}).get("days_back", 3))
     cutoff = utc_now() - timedelta(days=days_back)
 
     fresh: List[Item] = []
@@ -529,7 +550,10 @@ def main():
     if not fresh:
         webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
         if webhook:
-            slack_post(webhook, f"*AI Econ Digest* ({utc_now().date().isoformat()}): No new items found in last {days_back} days.")
+            slack_post(
+                webhook,
+                f"*AI Econ Digest* ({utc_now().date().isoformat()}): No new items found in last {days_back} days."
+            )
         return
 
     top_items = select_top(fresh, cfg)
@@ -548,7 +572,7 @@ def main():
     if not webhook:
         raise RuntimeError("Missing SLACK_WEBHOOK_URL secret/env var.")
 
-    links_line = ", ".join([f"<{it.url}|{it.title[:70]}>" for it in top_items])
+    links_line = ", ".join([f"<{it.url}|{it.title[:80]}>" for it in top_items])
     header = f"*AI Econ Digest* ({utc_now().date().isoformat()})\nTop picks: {links_line}\n"
     message = header + "\n" + llm_text
 

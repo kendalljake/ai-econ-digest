@@ -166,71 +166,162 @@ def keyword_score(text: str, keywords: List[str]) -> float:
             score += 1.0
     return score
 
+def count_hits(text: str, keywords: List[str]) -> int:
+    t = (text or "").lower()
+    return sum(1 for kw in keywords if kw.lower() in t)
+
+def source_prior(tags: List[str], source: str) -> float:
+    score = 0.0
+    tagset = set(tags or [])
+
+    if "research" in tagset:
+        score += 2.2
+    if "journalism" in tagset:
+        score += 1.6
+    if "blog" in tagset:
+        score += 1.2
+    if "africa" in tagset:
+        score += 1.0
+    if "investigative" in tagset:
+        score += 0.8
+    if "policy" in tagset:
+        score += 0.5
+
+    # small manual bump for especially high-signal sources
+    elite_sources = {
+        "Rest of World", "The Markup", "ProPublica", "VoxEU / CEPR",
+        "Noahpinion", "The Diff", "MIT Work of the Future",
+        "Stanford HAI", "TechCabal", "IZA Discussion Papers"
+    }
+    if source in elite_sources:
+        score += 0.5
+
+    return score
+
+def thematic_scores(text: str) -> Dict[str, float]:
+    labor_keywords = [
+        "labor", "jobs", "employment", "wages", "occupation", "occupations",
+        "worker", "workers", "productivity", "inequality", "hiring", "skills"
+    ]
+    structural_keywords = [
+        "firm", "firms", "organization", "organizational", "workflow", "workflows",
+        "management", "diffusion", "market power", "platform", "open source",
+        "compute", "infrastructure", "business model", "competition", "adoption"
+    ]
+    africa_keywords = [
+        "africa", "african", "nigeria", "kenya", "uganda", "south africa",
+        "ghana", "ethiopia", "developing countries", "global south",
+        "services exports", "outsourcing", "digital public infrastructure"
+    ]
+    theory_keywords = [
+        "model", "theory", "mechanism", "identification", "evidence",
+        "dataset", "experiment", "survey", "quasi-experimental", "working paper"
+    ]
+    hype_negative = [
+        "product launch", "new feature", "api update", "benchmark", "demo",
+        "funding round", "series a", "series b", "product announcement"
+    ]
+
+    return {
+        "labor": 1.4 * count_hits(text, labor_keywords),
+        "structural": 1.2 * count_hits(text, structural_keywords),
+        "africa": 1.5 * count_hits(text, africa_keywords),
+        "theory": 1.0 * count_hits(text, theory_keywords),
+        "hype_penalty": -1.2 * count_hits(text, hype_negative),
+    }
 
 def select_top(items: List[Item], cfg: Dict) -> List[Item]:
     rank_cfg = cfg.get("ranking", {})
-    max_items = int(rank_cfg.get("max_items_to_consider", 120))
+    max_items = int(rank_cfg.get("max_items_to_consider", 180))
     top_k = int(rank_cfg.get("top_k", 5))
     diversify = bool(rank_cfg.get("diversify_by_type", True))
+    min_score = float(rank_cfg.get("min_score", 2.0))
 
-    keywords = cfg.get("arxiv", {}).get("keywords", []) + [
-        "ai",
-        "artificial intelligence",
-        "llm",
-        "automation",
-        "labor",
-        "jobs",
-        "employment",
-        "productivity",
-        "wages",
-        "tasks",
-        "occupation",
-        "inequality",
-        "market power",
-        "open source",
-        "compute",
-    ]
-
+    keywords = cfg.get("arxiv", {}).get("keywords", [])
     now = utc_now()
-    scored: List[Tuple[float, Item]] = []
+    scored: List[Tuple[float, Dict[str, float], Item]] = []
+
     items = sorted(items, key=lambda x: x.published, reverse=True)[:max_items]
 
     for it in items:
         text = f"{it.title}\n{it.summary}"
-        ks = keyword_score(text, keywords)
+
+        keyword_base = 0.8 * count_hits(text, keywords)
+        theme = thematic_scores(text)
+        prior = source_prior(it.tags, it.source)
+
         hours_old = max(1.0, (now - it.published).total_seconds() / 3600.0)
         recency = 1.0 / (hours_old ** 0.35)
-        kind_prior = 0.3 if it.kind == "paper" else 0.0
-        score = (ks * 1.15) + recency + kind_prior
-        scored.append((score, it))
+
+        total = (
+            keyword_base
+            + theme["labor"]
+            + theme["structural"]
+            + theme["africa"]
+            + theme["theory"]
+            + theme["hype_penalty"]
+            + prior
+            + recency
+        )
+
+        if total >= min_score:
+            scored.append((total, theme, it))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
     if not diversify:
-        return [it for _, it in scored[:top_k]]
+        return [it for _, _, it in scored[:top_k]]
 
     chosen: List[Item] = []
-    paper = next((it for _, it in scored if it.kind == "paper"), None)
-    if paper:
-        chosen.append(paper)
+    used_sources = set()
+    kind_counts = {"paper": 0, "blog": 0, "news": 0, "unknown": 0}
+    africa_count = 0
 
-    for _, it in scored:
+    # pass 1: enforce variety
+    for total, theme, it in scored:
         if len(chosen) >= top_k:
             break
-        if it in chosen:
+
+        # avoid taking too many from the same source
+        if it.source in used_sources:
             continue
+
+        # ensure at least one paper if possible
+        if kind_counts["paper"] == 0 and it.kind == "paper":
+            chosen.append(it)
+            used_sources.add(it.source)
+            kind_counts[it.kind] += 1
+            if "africa" in it.tags:
+                africa_count += 1
+            continue
+
+        # try to include at least one Africa-relevant item
+        if africa_count == 0 and ("africa" in it.tags or theme["africa"] > 0):
+            chosen.append(it)
+            used_sources.add(it.source)
+            kind_counts[it.kind] += 1
+            africa_count += 1
+            continue
+
+    # pass 2: fill remaining slots by score with light dedupe
+    seen_title_keys = {re.sub(r"\\W+", "", x.title.lower())[:90] for x in chosen}
+
+    for total, theme, it in scored:
+        if len(chosen) >= top_k:
+            break
+        if it.source in used_sources:
+            continue
+
+        key = re.sub(r"\\W+", "", it.title.lower())[:90]
+        if key in seen_title_keys:
+            continue
+
         chosen.append(it)
+        used_sources.add(it.source)
+        seen_title_keys.add(key)
+        kind_counts[it.kind] += 1
 
-    final: List[Item] = []
-    seen_keys = set()
-    for it in chosen:
-        k = re.sub(r"\W+", "", it.title.lower())[:90]
-        if k in seen_keys:
-            continue
-        seen_keys.add(k)
-        final.append(it)
-
-    return final[:top_k]
+    return chosen[:top_k]
 
 
 def slack_post(webhook_url: str, text: str):
@@ -256,20 +347,30 @@ You are helping an economist-researcher track AI impacts on the economy, society
 INTEREST PROFILE:
 {interest_profile}
 
-STYLE PACK:
+THINKING GUIDE:
 {style_pack}
 
 TASK:
-1) Select the top 4–5 items (you may drop low-signal ones).
-2) For each selected item:
-   - 5 bullet summary (plain language)
-   - 2 bullets: economic interpretation / mechanism
-   - 1 bullet: what I'd cite or watch for (data, identification, assumptions, missing evidence)
-3) Draft:
-   - 2 X posts (<= 240 words each)
-   - 2 LinkedIn posts (120–250 words each)
-Each post should reference 1–2 selected items with links and connect to the interest profile themes.
-Be grounded and slightly skeptical. No hype. Do not invent facts not supported by the snippets.
+1) Select the top 4-5 items.
+2) For each selected item provide:
+   - a 4-5 bullet summary in plain language
+   - 2 bullets on the core economic mechanism or implication
+   - 1 bullet on what is uncertain, weakly evidenced, or worth checking
+3) Then provide a section called LINKAGES TO ONGOING WORK:
+   - identify 5-8 possible connections across the selected items and the user's broader research agenda
+   - highlight recurring themes, tensions, or openings for future writing/research
+   - suggest hypotheses, framing angles, or conceptual threads
+   - do NOT draft social media posts
+
+Focus especially on:
+- task decomposition
+- human verification / underwriting
+- firm bottlenecks
+- organizational redesign
+- market structure / open source / compute
+- implications for Africa and services-led growth
+
+Be grounded and slightly skeptical. Do not invent facts not supported by the snippets.
 
 ITEMS:
 {chr(10).join(blocks)}
@@ -282,15 +383,8 @@ SUMMARIES:
 1) ...
 2) ...
 
-DRAFT POSTS:
-X POST 1:
-...
-X POST 2:
-...
-LINKEDIN POST 1:
-...
-LINKEDIN POST 2:
-...
+LINKAGES TO ONGOING WORK:
+- ...
 """.strip()
 
 

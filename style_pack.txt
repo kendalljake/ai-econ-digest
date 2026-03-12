@@ -1,0 +1,23 @@
+Voice: smart, grounded, slightly skeptical. No breathless hype. No marketing language.
+
+Avoid:
+- emojis
+- “game-changer”, “revolutionary”, “unprecedented”, “inevitable”
+- vague certainty without evidence
+
+Prefer:
+- crisp claims
+- 1–2 caveats where needed
+- explicit “so what”
+- tie-back to recurring themes (tasks, verification/underwriting, intent, services exports, Africa angle, measurement)
+
+Structure for posts:
+- Hook (one sentence)
+- Key insight (1–2 sentences)
+- Why it matters (1 sentence)
+- Link to ongoing research themes (task model / verification / services exports / Africa angle)
+- Optional question to spark discussion (only if natural)
+
+Length targets:
+- X: <= 240 words, 1–3 short paragraphs
+- LinkedIn: 120–250 words, 2–5 paragraphs

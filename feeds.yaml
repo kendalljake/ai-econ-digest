@@ -1,0 +1,48 @@
+feeds:
+  - name: "AVC"
+    url: "https://feeds.feedblitz.com/avc"
+    type: "rss"
+    tags: ["tech", "markets", "blog"]
+
+  - name: "TechCabal"
+    url: "https://techcabal.com/feed/"
+    type: "rss"
+    tags: ["africa", "tech", "policy", "news"]
+
+  - name: "VoxEU / CEPR"
+    url: "https://cepr.org/rss/vox-content"
+    type: "rss"
+    tags: ["econ", "policy", "blog"]
+
+arxiv:
+  categories: ["cs.AI", "cs.LG", "cs.CL", "econ.GN"]
+  keywords:
+    - labor
+    - jobs
+    - wages
+    - productivity
+    - automation
+    - task
+    - tasks
+    - employment
+    - occupation
+    - occupations
+    - inequality
+    - market power
+    - monopsony
+    - firm
+    - firms
+    - diffusion
+
+ranking:
+  days_back: 2
+  max_items_to_consider: 120
+  top_k: 5
+  diversify_by_type: true
+
+email_intake:
+  enabled: true
+  subject_prefix: "ADD FEED"
+
+output:
+  slack_max_items_in_main_message: 5

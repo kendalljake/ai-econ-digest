@@ -1,44 +1,206 @@
 feeds:
-  - name: "AVC"
-    url: "https://feeds.feedblitz.com/avc"
+  # Investigative / structural journalism
+  - name: "Rest of World"
+    url: "https://restofworld.org/feed/"
     type: "rss"
-    tags: ["tech", "markets", "blog"]
+    tags: ["journalism", "global", "tech", "labor", "africa"]
 
-  - name: "TechCabal"
-    url: "https://techcabal.com/feed/"
+  - name: "The Markup"
+    url: "https://themarkup.org/feeds/rss.xml"
     type: "rss"
-    tags: ["africa", "tech", "policy", "news"]
+    tags: ["journalism", "accountability", "platforms", "labor"]
 
+  - name: "ProPublica"
+    url: "https://www.propublica.org/feeds/propublica/main"
+    type: "rss"
+    tags: ["journalism", "investigative", "policy", "institutions"]
+
+  - name: "Reuters Technology"
+    url: "https://feeds.reuters.com/reuters/technologyNews"
+    type: "rss"
+    tags: ["journalism", "news", "technology", "firms"]
+
+  - name: "Wired"
+    url: "https://www.wired.com/feed/rss"
+    type: "rss"
+    tags: ["journalism", "technology", "culture", "selective"]
+
+  - name: "Financial Times Tech"
+    url: "MANUAL_ADD_IF_YOU_HAVE_A_WORKING_FEED"
+    type: "manual"
+    tags: ["journalism", "economics", "technology", "firms", "paywalled"]
+
+  # Deep blogs / theory / strategy
+  - name: "Noahpinion"
+    url: "https://www.noahpinion.blog/feed"
+    type: "rss"
+    tags: ["blog", "economics", "technology", "theory"]
+
+  - name: "The Diff"
+    url: "https://www.thediff.co/feed"
+    type: "rss"
+    tags: ["blog", "markets", "firms", "technology", "theory"]
+
+  - name: "Benedict Evans"
+    url: "https://www.ben-evans.com/benedictevans?format=rss"
+    type: "rss"
+    tags: ["blog", "technology", "markets", "strategy"]
+
+  - name: "Stratechery"
+    url: "MANUAL_ADD_CUSTOM_RSS_IF_SUBSCRIBED"
+    type: "manual"
+    tags: ["blog", "strategy", "market_structure", "technology", "paywalled"]
+
+  - name: "Alex Imas"
+    url: "https://aleximas.substack.com/feed"
+    type: "rss"
+    tags: ["blog", "economics", "behavior", "theory"]
+
+  - name: "Alap Shah"
+    url: "https://alapshah1.substack.com/feed"
+    type: "rss"
+    tags: ["blog", "global", "development", "technology"]
+
+  - name: "Marginal Revolution"
+    url: "https://marginalrevolution.com/feed"
+    type: "rss"
+    tags: ["blog", "economics", "ideas", "theory"]
+
+  - name: "Works in Progress"
+    url: "https://worksinprogress.co/feed"
+    type: "rss"
+    tags: ["blog", "history", "institutions", "economic_change"]
+
+  - name: "Interconnects"
+    url: "https://www.interconnects.ai/feed"
+    type: "rss"
+    tags: ["blog", "ai", "compute", "infrastructure"]
+
+  - name: "Dwarkesh"
+    url: "https://www.dwarkesh.com/feed"
+    type: "rss"
+    tags: ["blog", "ai", "theory", "longform"]
+
+  - name: "Conversations with Tyler"
+    url: "https://conversationswithtyler.com/feed/"
+    type: "rss"
+    tags: ["podcast", "economics", "ideas", "longform"]
+
+  # Research / evidence / policy
   - name: "VoxEU / CEPR"
     url: "https://cepr.org/rss/vox-content"
     type: "rss"
-    tags: ["econ", "policy", "blog"]
+    tags: ["research", "economics", "policy", "evidence"]
+
+  - name: "IZA Discussion Papers"
+    url: "https://www.iza.org/publications/rss/dp"
+    type: "rss"
+    tags: ["research", "labor", "economics", "evidence"]
+
+  - name: "NBER"
+    url: "MANUAL_ADD_NBER_NEWSLETTER_OR_FEED"
+    type: "manual"
+    tags: ["research", "economics", "working_papers", "evidence"]
+
+  - name: "OECD AI"
+    url: "https://oecd.ai/en/rss"
+    type: "rss"
+    tags: ["policy", "ai", "measurement", "institutions"]
+
+  - name: "Stanford HAI"
+    url: "https://hai.stanford.edu/rss.xml"
+    type: "rss"
+    tags: ["research", "ai", "policy", "institutions"]
+
+  - name: "MIT Work of the Future"
+    url: "https://workofthefuture.mit.edu/feed/"
+    type: "rss"
+    tags: ["research", "labor", "future_of_work", "institutions"]
+
+  - name: "Berkeley AI Research"
+    url: "https://bair.berkeley.edu/blog/feed.xml"
+    type: "rss"
+    tags: ["research", "ai", "technical", "selective"]
+
+  - name: "AEA Research Highlights"
+    url: "https://www.aeaweb.org/news/rss"
+    type: "rss"
+    tags: ["research", "economics", "evidence"]
+
+  # Africa / global digital economy
+  - name: "TechCabal"
+    url: "https://techcabal.com/feed/"
+    type: "rss"
+    tags: ["africa", "technology", "firms", "digital_economy"]
+
+  - name: "Techpoint Africa"
+    url: "https://techpoint.africa/feed/"
+    type: "rss"
+    tags: ["africa", "technology", "startups", "digital_economy"]
+
+  - name: "Stears"
+    url: "https://www.stears.co/rss"
+    type: "rss"
+    tags: ["africa", "economics", "policy", "firms"]
 
 arxiv:
-  categories: ["cs.AI", "cs.LG", "cs.CL", "econ.GN"]
+  categories: ["cs.AI", "cs.CL", "cs.LG", "econ.GN"]
   keywords:
     - labor
     - jobs
+    - employment
     - wages
     - productivity
-    - automation
-    - task
-    - tasks
-    - employment
+    - inequality
     - occupation
     - occupations
-    - inequality
-    - market power
-    - monopsony
+    - task
+    - tasks
+    - workflow
+    - workflows
+    - automation
+    - organizational change
     - firm
     - firms
+    - management
     - diffusion
-
+    - market power
+    - monopsony
+    - platform
+    - open source
+    - compute
+    - GPU
+    - GPUs 
+    - infrastructure
+    - digital public infrastructure
+    - services exports
+    - outsourcing
+    - business process outsourcing
+    - verification
+    - underwriting
+    - bottleneck
+    - bottlenecks
+    - Africa
+    - developing countries
+    - global south
+    - DPI
+    - services led growth
+    - services-led growth
+    - industrial policy
+    - AI
+    - artificial intelligence
+    - the continent
+    - nigeria
+    - kenya
+    - egypt
+    - south africa
+    
 ranking:
-  days_back: 2
-  max_items_to_consider: 120
+  days_back: 3
+  max_items_to_consider: 200
   top_k: 5
   diversify_by_type: true
+  min_score: 2.0
 
 email_intake:
   enabled: true
@@ -46,3 +208,4 @@ email_intake:
 
 output:
   slack_max_items_in_main_message: 5
+ 

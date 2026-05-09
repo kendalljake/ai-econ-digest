@@ -13,6 +13,13 @@ from dateutil import parser as dateparser
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
+# Load .env if present (keeps secrets off the command line)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 DB_PATH = "state.sqlite"
 FEEDS_YAML = "feeds.yaml"
@@ -398,20 +405,57 @@ LINKAGES TO ONGOING WORK:
 """.strip()
 
 
-def llm_run(api_key: str, model: str, prompt: str) -> str:
+SYSTEM_PROMPT = "You are a precise research assistant. Do not invent facts. Use only provided snippets and common knowledge."
+
+
+def llm_run_openai(api_key: str, model: str, prompt: str) -> str:
     client = OpenAI(api_key=api_key)
     resp = client.chat.completions.create(
         model=model,
         messages=[
-            {
-                "role": "system",
-                "content": "You are a precise research assistant. Do not invent facts. Use only provided snippets and common knowledge.",
-            },
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         temperature=0.3,
     )
     return resp.choices[0].message.content.strip()
+
+
+def llm_run_anthropic(api_key: str, model: str, prompt: str) -> str:
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    resp = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+    return resp.content[0].text.strip()
+
+
+def llm_run(api_key: str, model: str, prompt: str) -> Tuple[str, str]:
+    """Try OpenAI first; fall back to Anthropic on failure.
+    Returns (response_text, model_used)."""
+    # If the key looks like an Anthropic key, skip straight to Anthropic
+    if api_key.startswith("sk-ant-"):
+        anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+        return llm_run_anthropic(api_key, anthropic_model, prompt), anthropic_model
+
+    # Try OpenAI
+    try:
+        return llm_run_openai(api_key, model, prompt), model
+    except Exception as openai_err:
+        print(f"[llm_run] OpenAI failed ({openai_err}); trying Anthropic fallback…")
+
+    # Fall back to Anthropic
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not anthropic_key:
+        raise RuntimeError(
+            f"OpenAI call failed and no ANTHROPIC_API_KEY found. Original error: {openai_err}"
+        )
+    anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+    return llm_run_anthropic(anthropic_key, anthropic_model, prompt), anthropic_model
 
 
 def extract_urls(text: str) -> List[str]:
@@ -566,14 +610,14 @@ def main():
     interest_profile = load_text("interest_profile.txt")
     style_pack = load_text("style_pack.txt")
     prompt = build_llm_prompt(top_items, interest_profile, style_pack)
-    llm_text = llm_run(api_key, model, prompt)
+    llm_text, model_used = llm_run(api_key, model, prompt)
 
     webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
     if not webhook:
         raise RuntimeError("Missing SLACK_WEBHOOK_URL secret/env var.")
 
     links_line = ", ".join([f"<{it.url}|{it.title[:80]}>" for it in top_items])
-    header = f"*AI Econ Digest* ({utc_now().date().isoformat()})\nTop picks: {links_line}\n"
+    header = f"*AI Econ Digest* ({utc_now().date().isoformat()}) _via {model_used}_\nTop picks: {links_line}\n"
     message = header + "\n" + llm_text
 
     if len(message) > 35000:
